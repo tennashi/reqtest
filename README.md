@@ -6,10 +6,13 @@ HTTP handlers for testing HTTP requests
 
 ## Usage
 ```go
-package some_test
+package reqtest_test
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
 	"github.com/tennashi/reqtest"
 )
 
@@ -21,6 +24,6 @@ func TestSomeRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer res.Close()
+	defer res.Body.Close()
 }
 ```
