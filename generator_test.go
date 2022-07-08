@@ -3,6 +3,7 @@ package reqtest_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -128,6 +129,73 @@ func TestHandlerGenerator_ComparePath(t *testing.T) {
 
 			t.Run("mismatched path", func(t *testing.T) {
 				res, err := http.Get(u.String() + "/mismatch")
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer res.Body.Close()
+
+				select {
+				case <-failMesCh:
+				default:
+					t.Fatal("expect the cause of the failure to be output, but it was not")
+				}
+			})
+		})
+	}
+}
+
+func TestHandlerGenerator_CompareQuery(t *testing.T) {
+	cases := []url.Values{
+		{},
+		{"foo": []string{"foo1"}},
+		{"foo": []string{"foo1", "foo2"}},
+		{
+			"foo": []string{"foo1", "foo2"},
+			"bar": []string{"bar1", "bar2"},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run("", func(t *testing.T) {
+			t.Run("matching", func(t *testing.T) {
+				failMesCh := make(chan string, 10)
+				defer close(failMesCh)
+
+				got := HandlerGeneratorForTest(failMesCh).CompareQuery(tt)
+				srv := httptest.NewServer(got)
+				defer srv.Close()
+
+				req, err := http.NewRequest("GET", fmt.Sprintf("%s?%s", srv.URL, tt.Encode()), nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				res, err := http.DefaultClient.Do(req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer res.Body.Close()
+
+				select {
+				case mes := <-failMesCh:
+					t.Fatalf("expect the cause of the failure will not be output, but got: %s", mes)
+				default:
+				}
+			})
+			t.Run("mismatched", func(t *testing.T) {
+				failMesCh := make(chan string, 10)
+				defer close(failMesCh)
+
+				got := HandlerGeneratorForTest(failMesCh).CompareQuery(tt)
+				srv := httptest.NewServer(got)
+				defer srv.Close()
+
+				req, err := http.NewRequest("GET", fmt.Sprintf("%s?mismatched=1", srv.URL), nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				res, err := http.DefaultClient.Do(req)
 				if err != nil {
 					t.Fatal(err)
 				}
