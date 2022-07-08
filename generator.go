@@ -39,15 +39,23 @@ func (g *HandlerGenerator) CompareHeaderValues(key string, values []string) http
 }
 
 func (g *HandlerGenerator) CompareJSONBody(jsonBody interface{}) http.Handler {
-	got := jsonBody
+	wantData, err := json.Marshal(jsonBody)
+	if err != nil {
+		g.OnFailure.Fail(err.Error())
+	}
+	var want interface{}
+	if err := json.Unmarshal(wantData, &want); err != nil {
+		g.OnFailure.Fail(err.Error())
+	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if err := json.NewDecoder(req.Body).Decode(got); err != nil {
+		var got interface{}
+		if err := json.NewDecoder(req.Body).Decode(&got); err != nil {
 			g.OnFailure.Fail(err.Error())
 			return
 		}
 
-		if diff := cmp.Diff(got, jsonBody); diff != "" {
+		if diff := cmp.Diff(got, want); diff != "" {
 			g.OnFailure.Fail(diff)
 			return
 		}

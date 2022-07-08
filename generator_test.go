@@ -1,10 +1,13 @@
 package reqtest_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -201,6 +204,92 @@ func TestHandlerGenerator_CompareHeaderValues(t *testing.T) {
 				}
 				req.Header.Add("X-Mismatched-Header", "some")
 				req.Header.Add("X-Mismatched-Header", "value")
+
+				res, err := http.DefaultClient.Do(req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer res.Body.Close()
+
+				select {
+				case <-failMesCh:
+				default:
+					t.Fatal("expect the cause of the failure to be output, but it was not")
+				}
+			})
+		})
+	}
+}
+
+func TestHandlerGenerator_CompareJSONBody(t *testing.T) {
+	cases := []struct {
+		input interface{}
+	}{
+		{input: "hoge"},
+		{
+			input: map[string]string{"hoge": "fuga"},
+		},
+		{
+			input: struct {
+				V string
+				W int
+			}{},
+		},
+		{
+			input: struct {
+				V string `json:"v"`
+				W int    `json:"w"`
+			}{},
+		},
+		{
+			input: struct{}{},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run("", func(t *testing.T) {
+			t.Run("matching", func(t *testing.T) {
+				failMesCh := make(chan string, 10)
+				defer close(failMesCh)
+
+				var reqBody bytes.Buffer
+				if err := json.NewEncoder(&reqBody).Encode(tt.input); err != nil {
+					t.Fatal(err)
+				}
+
+				got := HandlerGeneratorForTest(failMesCh).CompareJSONBody(tt.input)
+				srv := httptest.NewServer(got)
+				defer srv.Close()
+
+				req, err := http.NewRequest("GET", srv.URL, &reqBody)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				res, err := http.DefaultClient.Do(req)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer res.Body.Close()
+
+				select {
+				case mes := <-failMesCh:
+					t.Fatalf("expect the cause of the failure will not be output, but got: %s", mes)
+				default:
+				}
+			})
+			t.Run("mismatched", func(t *testing.T) {
+				failMesCh := make(chan string, 10)
+				defer close(failMesCh)
+
+				got := HandlerGeneratorForTest(failMesCh).CompareJSONBody(tt.input)
+				srv := httptest.NewServer(got)
+				defer srv.Close()
+
+				req, err := http.NewRequest("GET", srv.URL, strings.NewReader(`{"mismatched":"request"}`))
+				if err != nil {
+					t.Fatal(err)
+				}
 
 				res, err := http.DefaultClient.Do(req)
 				if err != nil {
