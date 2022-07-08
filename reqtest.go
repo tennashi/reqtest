@@ -2,6 +2,7 @@ package reqtest
 
 import (
 	"net/http"
+	"net/url"
 	"testing"
 )
 
@@ -19,6 +20,14 @@ func ComparePathHandler(t *testing.T, path string) http.Handler {
 	return (&HandlerGenerator{
 		OnFailure: &TError{t: t},
 	}).ComparePath(path)
+}
+
+func CompareQueryHandler(t *testing.T, want url.Values) http.Handler {
+	t.Helper()
+
+	return (&HandlerGenerator{
+		OnFailure: &TError{t: t},
+	}).CompareQuery(want)
 }
 
 func CompareHeaderValuesHandler(t *testing.T, key string, values []string) http.Handler {

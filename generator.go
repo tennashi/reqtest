@@ -3,6 +3,7 @@ package reqtest
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -23,6 +24,16 @@ func (g *HandlerGenerator) CompareMethod(method string) http.Handler {
 func (g *HandlerGenerator) ComparePath(path string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if diff := cmp.Diff(req.URL.Path, path); diff != "" {
+			g.OnFailure.Fail(diff)
+			return
+		}
+	})
+}
+
+func (g *HandlerGenerator) CompareQuery(want url.Values) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		got := req.URL.Query()
+		if diff := cmp.Diff(got, want); diff != "" {
 			g.OnFailure.Fail(diff)
 			return
 		}
